@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -39,6 +40,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlin.random.Random
+
+private data class SudokuPuzzle(
+    val puzzle: IntArray,
+    val solution: IntArray,
+)
 
 private data class Cell(
     val value: Int?,
@@ -53,19 +60,32 @@ fun SudokuScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val puzzle = remember { defaultPuzzle() }
-    val solution = remember { defaultSolution() }
+    var mission by remember { mutableIntStateOf(1) }
+    var current by remember {
+        mutableStateOf(generatePuzzle(seed = System.nanoTime() xor System.currentTimeMillis()))
+    }
 
     val cells = remember {
         mutableStateListOf<Cell>().apply {
-            for (i in 0 until 81) {
-                val v = puzzle[i].takeIf { it != 0 }
-                add(Cell(value = v, isGiven = v != null))
-            }
+            for (i in 0 until 81) add(Cell(value = null, isGiven = false))
         }
     }
 
     var selectedIndex by remember { mutableIntStateOf(-1) }
+
+    fun applyPuzzle(puzzle: SudokuPuzzle) {
+        current = puzzle
+        for (i in 0 until 81) {
+            val v = puzzle.puzzle[i].takeIf { it != 0 }
+            cells[i] = Cell(value = v, isGiven = v != null)
+        }
+        selectedIndex = -1
+    }
+
+    fun nextMission() {
+        mission += 1
+        applyPuzzle(generatePuzzle(seed = System.nanoTime() xor System.currentTimeMillis()))
+    }
 
     fun setCell(index: Int, value: Int?) {
         if (index !in 0 until 81) return
@@ -79,28 +99,26 @@ fun SudokuScreen(
 
     fun verify() {
         for (i in 0 until 81) {
-            val expected = solution[i]
+            val expected = current.solution[i]
             val actual = cells[i].value ?: 0
             if (expected != actual) {
                 showMessage("Todavía hay errores")
                 return
             }
         }
-        showMessage("¡Correcto!")
+        showMessage("¡Correcto! Siguiente misión")
+        nextMission()
     }
 
     fun reset() {
-        for (i in 0 until 81) {
-            val v = puzzle[i].takeIf { it != 0 }
-            cells[i] = Cell(value = v, isGiven = v != null)
-        }
-        selectedIndex = -1
+        mission = 1
+        applyPuzzle(generatePuzzle(seed = System.nanoTime() xor System.currentTimeMillis()))
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sudoku") },
+                title = { Text("Sudoku · Misión $mission") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Volver") }
                 },
@@ -264,30 +282,65 @@ private fun NumberPad(
 
 private fun Boolean?.orDefault(default: Boolean): Boolean = this ?: default
 
-private fun defaultPuzzle(): IntArray {
-    return intArrayOf(
-        5, 3, 0, 0, 7, 0, 0, 0, 0,
-        6, 0, 0, 1, 9, 5, 0, 0, 0,
-        0, 9, 8, 0, 0, 0, 0, 6, 0,
-        8, 0, 0, 0, 6, 0, 0, 0, 3,
-        4, 0, 0, 8, 0, 3, 0, 0, 1,
-        7, 0, 0, 0, 2, 0, 0, 0, 6,
-        0, 6, 0, 0, 0, 0, 2, 8, 0,
-        0, 0, 0, 4, 1, 9, 0, 0, 5,
-        0, 0, 0, 0, 8, 0, 0, 7, 9,
+private val baseSolution = intArrayOf(
+    5, 3, 4, 6, 7, 8, 9, 1, 2,
+    6, 7, 2, 1, 9, 5, 3, 4, 8,
+    1, 9, 8, 3, 4, 2, 5, 6, 7,
+    8, 5, 9, 7, 6, 1, 4, 2, 3,
+    4, 2, 6, 8, 5, 3, 7, 9, 1,
+    7, 1, 3, 9, 2, 4, 8, 5, 6,
+    9, 6, 1, 5, 3, 7, 2, 8, 4,
+    2, 8, 7, 4, 1, 9, 6, 3, 5,
+    3, 4, 5, 2, 8, 6, 1, 7, 9,
+)
+
+private fun generatePuzzle(seed: Long): SudokuPuzzle {
+    val random = Random(seed)
+    val solved = generateSolvedGrid(random)
+    val puzzle = solved.copyOf()
+
+    val clueCount = random.nextInt(from = 28, until = 38)
+    val indices = (0 until 81).shuffled(random)
+    val toRemove = 81 - clueCount
+    for (i in 0 until toRemove) {
+        puzzle[indices[i]] = 0
+    }
+
+    return SudokuPuzzle(
+        puzzle = puzzle,
+        solution = solved,
     )
 }
 
-private fun defaultSolution(): IntArray {
-    return intArrayOf(
-        5, 3, 4, 6, 7, 8, 9, 1, 2,
-        6, 7, 2, 1, 9, 5, 3, 4, 8,
-        1, 9, 8, 3, 4, 2, 5, 6, 7,
-        8, 5, 9, 7, 6, 1, 4, 2, 3,
-        4, 2, 6, 8, 5, 3, 7, 9, 1,
-        7, 1, 3, 9, 2, 4, 8, 5, 6,
-        9, 6, 1, 5, 3, 7, 2, 8, 4,
-        2, 8, 7, 4, 1, 9, 6, 3, 5,
-        3, 4, 5, 2, 8, 6, 1, 7, 9,
-    )
+private fun generateSolvedGrid(random: Random): IntArray {
+    val digits = (1..9).shuffled(random)
+    val map = IntArray(10)
+    for (i in 1..9) map[i] = digits[i - 1]
+
+    val bandOrder = listOf(0, 1, 2).shuffled(random)
+    val rowOrder = buildList(9) {
+        for (band in bandOrder) {
+            val rowsInBand = listOf(0, 1, 2).shuffled(random)
+            for (r in rowsInBand) add(band * 3 + r)
+        }
+    }
+
+    val stackOrder = listOf(0, 1, 2).shuffled(random)
+    val colOrder = buildList(9) {
+        for (stack in stackOrder) {
+            val colsInStack = listOf(0, 1, 2).shuffled(random)
+            for (c in colsInStack) add(stack * 3 + c)
+        }
+    }
+
+    val out = IntArray(81)
+    for (newRow in 0 until 9) {
+        val oldRow = rowOrder[newRow]
+        for (newCol in 0 until 9) {
+            val oldCol = colOrder[newCol]
+            val base = baseSolution[oldRow * 9 + oldCol]
+            out[newRow * 9 + newCol] = map[base]
+        }
+    }
+    return out
 }
