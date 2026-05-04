@@ -26,6 +26,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -80,6 +81,10 @@ fun SudokuScreen(
             cells[i] = Cell(value = v, isGiven = v != null)
         }
         selectedIndex = -1
+    }
+
+    LaunchedEffect(Unit) {
+        applyPuzzle(current)
     }
 
     fun nextMission() {
